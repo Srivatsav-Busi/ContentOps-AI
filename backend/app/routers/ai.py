@@ -136,3 +136,25 @@ async def anomaly_explain(body: AnomalyExplainBody):
         recent_data_points=body.recentDataPoints or [],
     )
     return json_response(result)
+
+
+# ── POST /api/v1/ai/kpi-recommend ──
+
+class KpiRecommendBody(BaseModel):
+    industry: str
+    businessType: str
+    goals: list[str]
+    existingKpis: list[str] | None = None
+
+
+@router.post("/kpi-recommend")
+async def kpi_recommend(body: KpiRecommendBody):
+    from app.services.kpi_recommender import recommend_kpis
+
+    result = await recommend_kpis(
+        industry=body.industry,
+        business_type=body.businessType,
+        goals=body.goals,
+        existing_kpis=body.existingKpis,
+    )
+    return json_response(result)

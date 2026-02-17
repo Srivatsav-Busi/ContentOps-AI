@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     # Auth
     nextauth_secret: str = ""
 
+    # OAuth (social account connections)
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    facebook_app_id: str = ""
+    facebook_app_secret: str = ""
+    oauth_redirect_base_url: str = "http://localhost:8000"
+
     model_config = {"env_file": "../.env.local", "extra": "ignore"}
 
     @property

@@ -26,20 +26,23 @@ Browser ──▶ Next.js :3000 (Frontend + Auth + Proxy) ──▶ Python FastA
 
 ## Features
 
-- AI video processing: upload endpoint stores files, extracts metadata via FFprobe, and generates thumbnails
-- SEO metadata generation: AI route + agent for title/description/tag generation from transcript data
-- Social publishing workflows: campaign CRUD APIs and publishing UI pages (queue/calendar/logs)
-- KPI dashboards/reporting: dashboard + report APIs and app pages
-- Auth + roles + org support: credential auth, registration, role-aware permission model
-- Alerts/exports/projects modules: implemented app pages + API routes
-- API routes: authenticated `/api/v1/*` surface for core operations
-- SQLite local-first stack: file-based DB (`data/contentops.db`) with typed schema and queries
+- **AI Video Processing** — upload, FFprobe metadata extraction, scene detection, thumbnail generation
+- **SEO Metadata Generation** — AI agent producing titles, descriptions, keywords (with intent), chapters, hashtags, engagement hooks, alt text, and on-screen text for Reels
+- **Social Publishing** — full lifecycle: connect YouTube/Instagram accounts via OAuth → create campaigns → schedule posts → auto-publish via background scheduler
+- **YouTube & Instagram API Integration** — resumable upload (YouTube Data API v3), container publish flow (Instagram Graph API)
+- **OAuth 2.0** — Google OAuth for YouTube, Facebook OAuth for Instagram Business Accounts
+- **Background Scheduler** — asyncio task that polls every 60s and auto-publishes due posts
+- **KPI Dashboards & Reporting** — dashboard/report CRUD, anomaly detection + AI explanation, AI-powered KPI recommendations
+- **5 AI Agents** — SEO generator, edit plan generator, anomaly explainer, report writer, KPI recommender
+- **Auth + Roles + Org** — credential auth, registration, role-aware permissions (viewer/editor/admin/owner)
+- **32 API Endpoints** — authenticated `/api/v1/*` surface covering all operations
+- **SQLite Local-First** — file-based DB (`data/contentops.db`) with 25-table schema
 
-### Current Implementation Notes
+### Notes
 
-- `Publishing Queue` page currently uses mock UI data (`src/app/(app)/app/publishing/queue/page.tsx`)
-- AI routes require transcript/scenes records to exist before generation calls succeed
-- OAuth buttons are present in UI, but credentials auth is the wired flow by default
+- AI routes require transcript/scene records to exist before generation calls succeed
+- OAuth requires `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET` in `.env.local`
+- Without OAuth credentials, OAuth endpoints return descriptive 501 errors (no crashes)
 
 ---
 
@@ -117,12 +120,20 @@ NEXTAUTH_URL=http://localhost:3000
 LLM_API_URL=https://openrouter.ai/api/v1/
 LLM_API_KEY=your-llm-api-key
 PYTHON_BACKEND_URL=http://localhost:8000
+
+# Optional: OAuth for social publishing
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+FACEBOOK_APP_ID=your-facebook-app-id
+FACEBOOK_APP_SECRET=your-facebook-app-secret
+OAUTH_REDIRECT_BASE_URL=http://localhost:8000
 ```
 
 Notes:
 - Keep the trailing `/` in `LLM_API_URL`.
 - SQLite is local by default at `./data/contentops.db` (no separate DB server required).
 - The Python backend reads the same `.env.local` file automatically.
+- OAuth credentials are only needed for YouTube/Instagram publishing. All other features work without them.
 
 ### Step 3: Database Setup
 
@@ -194,7 +205,7 @@ contentops/
 │   │   ├── database.py             # SQLAlchemy engine + session
 │   │   ├── dependencies.py         # Auth context dependency
 │   │   ├── models/                 # SQLAlchemy ORM models (25 tables)
-│   │   ├── routers/                # API route handlers (12 routers)
+│   │   ├── routers/                # API route handlers (15 routers)
 │   │   ├── schemas/                # Pydantic request/response schemas
 │   │   └── services/               # Business logic
 │   │       ├── ai_client.py        # OpenAI client setup
@@ -202,6 +213,9 @@ contentops/
 │   │       ├── edit_plan_generator.py  # Edit plan generation agent
 │   │       ├── anomaly_explainer.py    # Anomaly explanation agent
 │   │       ├── report_writer.py    # Report summary writer agent
+│   │       ├── kpi_recommender.py  # KPI recommendation agent
+│   │       ├── publisher.py        # YouTube + Instagram API publishing
+│   │       ├── scheduler.py        # Background auto-publish scheduler
 │   │       └── video/              # Video processing (ffmpeg)
 │   ├── requirements.txt            # Python dependencies
 │   └── venv/                       # Python virtual environment
@@ -240,8 +254,30 @@ All API routes are available under `/api/v1/*`. The Next.js frontend proxies req
 | POST | `/api/v1/ai/seo-generate` | Generate SEO metadata from transcript |
 | POST | `/api/v1/ai/edit-plan-generate` | Generate edit plan from scenes |
 | POST | `/api/v1/ai/anomaly-explain` | Explain KPI anomaly |
+| POST | `/api/v1/ai/kpi-recommend` | AI-recommended KPIs based on business context |
 
-### Distribution
+### Social Publishing
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/v1/social-accounts` | List / connect social accounts |
+| DELETE | `/api/v1/social-accounts/{id}` | Disconnect social account |
+| POST | `/api/v1/social-accounts/{id}/refresh-token` | Refresh OAuth token |
+| GET/POST | `/api/v1/scheduled-posts` | List / create scheduled posts |
+| PATCH | `/api/v1/scheduled-posts/{id}` | Update post metadata |
+| POST | `/api/v1/scheduled-posts/{id}/approve` | Approve draft → scheduled |
+| POST | `/api/v1/scheduled-posts/{id}/publish` | Manually trigger publish |
+| POST | `/api/v1/scheduled-posts/{id}/cancel` | Cancel scheduled post |
+| GET | `/api/v1/scheduled-posts/{id}/events` | View publish event history |
+
+### OAuth
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/oauth/youtube/authorize` | Get Google OAuth URL |
+| GET | `/api/v1/oauth/youtube/callback` | Handle YouTube OAuth callback |
+| GET | `/api/v1/oauth/instagram/authorize` | Get Facebook/Instagram OAuth URL |
+| GET | `/api/v1/oauth/instagram/callback` | Handle Instagram OAuth callback |
+
+### Distribution & Analytics
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET/POST | `/api/v1/campaigns` | List / create campaigns |
@@ -291,16 +327,22 @@ When the Python backend is running, visit [http://localhost:8000/docs](http://lo
 
 ### 4) Social Publishing Workflows
 
-1. Create a campaign using `POST /api/v1/campaigns`
-2. Review campaigns in `/app/publishing/calendar` or `/app/publishing/logs` and via `GET /api/v1/campaigns`
-3. Use `/app/publishing/queue` for queue visualization (currently mock UI state)
+1. **Connect accounts**: call `GET /api/v1/oauth/youtube/authorize` or `GET /api/v1/oauth/instagram/authorize` to get an OAuth URL, redirect the user, and the callback stores tokens automatically
+2. **Verify connection**: `GET /api/v1/social-accounts` lists connected accounts
+3. **Create a campaign**: `POST /api/v1/campaigns`
+4. **Schedule a post**: `POST /api/v1/scheduled-posts` with `campaignId`, `accountId`, `platform`, `scheduledAt`
+5. **Approve**: `POST /api/v1/scheduled-posts/{id}/approve` moves status from `draft` → `scheduled`
+6. **Auto-publish**: the background scheduler picks up due posts and publishes them automatically
+7. **Manual publish**: `POST /api/v1/scheduled-posts/{id}/publish` triggers immediate publishing
+8. **Monitor**: `GET /api/v1/scheduled-posts/{id}/events` shows publish event history with platform URLs, error codes, and retry counts
 
 ### 5) KPI Dashboards / Reporting
 
 1. Create dashboard: `POST /api/v1/dashboards` or use `/app/dashboards`
-2. List dashboards: `GET /api/v1/dashboards`
-3. View reports in `/app/reports` using `GET /api/v1/reports`
-4. Use AI anomaly explain route when anomaly data exists: `POST /api/v1/ai/anomaly-explain`
+2. **Get AI KPI recommendations**: `POST /api/v1/ai/kpi-recommend` with `industry`, `businessType`, `goals` — returns prioritized KPIs with visualization types and targets
+3. List dashboards: `GET /api/v1/dashboards`
+4. View reports in `/app/reports` using `GET /api/v1/reports`
+5. Use AI anomaly explain route when anomaly data exists: `POST /api/v1/ai/anomaly-explain`
 
 ### Edited Output Pipeline (API)
 

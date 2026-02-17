@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -20,6 +21,9 @@ from app.routers import (
     billing,
     seo_briefs,
     ai,
+    social_accounts,
+    scheduled_posts,
+    oauth,
 )
 
 
@@ -35,7 +39,20 @@ async def lifespan(app: FastAPI):
     # Create tables that don't yet exist (safe to call on existing DB)
     Base.metadata.create_all(bind=engine)
     print(f"[startup] Using database: {settings.db_path}")
+
+    # Start background scheduler for auto-publishing
+    from app.services.scheduler import run_scheduler
+    scheduler_task = asyncio.create_task(run_scheduler(poll_interval=60))
+    print("[startup] Background publish scheduler started")
+
     yield
+
+    # Shutdown: cancel scheduler
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        print("[shutdown] Scheduler stopped")
 
 
 app = FastAPI(
@@ -76,3 +93,7 @@ app.include_router(render_jobs.router)
 app.include_router(billing.router)
 app.include_router(seo_briefs.router)
 app.include_router(ai.router)
+app.include_router(social_accounts.router)
+app.include_router(scheduled_posts.router)
+app.include_router(oauth.router)
+
