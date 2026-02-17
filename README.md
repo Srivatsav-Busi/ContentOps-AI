@@ -324,6 +324,8 @@ When the Python backend is running, visit [http://localhost:8000/docs](http://lo
    - `platform` (`youtube` | `instagram` | `both`)
    - optional `targetAudience`
 4. Read generated briefs from `GET /api/v1/seo-briefs?project_id=<projectId>`
+   - Response includes: `title`, `description`, `chapters`, `keywords`, `hashtags`
+   - **Plus**: `altText`, `onScreenText`, and `engagementHook` (fully persisted)
 
 ### 4) Social Publishing Workflows
 

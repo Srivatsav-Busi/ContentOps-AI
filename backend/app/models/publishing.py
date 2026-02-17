@@ -15,6 +15,9 @@ class SeoBrief(Base):
     description = Column(Text)
     chapters = Column(Text, default="[]")
     thumbnail_text = Column(Text)
+    alt_text = Column(Text)
+    on_screen_text = Column(Text, default="[]")  # JSON array of strings
+    engagement_hook = Column(Text)
     target_audience = Column(Text)
     platform = Column(Text)
     version = Column(Integer, nullable=False, default=1)
