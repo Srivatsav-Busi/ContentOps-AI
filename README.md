@@ -27,6 +27,22 @@ This repository contains the implementation of the ContentOps AI platform, built
 
 ---
 
+## App Screenshots
+
+### Marketing Features Page
+
+![Marketing Features Page](docs/images/features-page.png)
+
+### Login Experience
+
+![Login Experience](docs/images/login-page.png)
+
+### Projects Dashboard
+
+![Projects Dashboard](docs/images/projects-dashboard.png)
+
+---
+
 ## Feature Walkthrough (Step by Step)
 
 ### 1) Auth + Roles + Org Support
