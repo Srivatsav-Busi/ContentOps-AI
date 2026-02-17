@@ -1,4 +1,4 @@
-"""SEO brief generation agent — port of agents/seo-generator.ts."""
+"""SEO brief generation agent — enhanced with YouTube & Instagram best practices."""
 
 import json
 import uuid
@@ -10,18 +10,100 @@ from app.config import settings
 from app.services.ai_client import get_openai_client
 from app.models.publishing import SeoBrief, Keyword, Hashtag
 
-SYSTEM_PROMPT = """You are an expert SEO specialist for video content platforms (YouTube, Instagram Reels, TikTok). Your job is to analyze video transcripts and generate highly optimized SEO metadata.
+SYSTEM_PROMPT = """\
+You are an expert SEO specialist for video content on YouTube and Instagram. \
+Your job is to analyze video transcripts and generate platform-optimized SEO metadata \
+that maximizes discoverability, click-through rate (CTR), and engagement.
 
-Your responsibilities:
-1. **Title**: Generate an SEO-optimized title under 60 characters. Front-load the primary keyword. Make it compelling and click-worthy without being clickbait.
-2. **Description**: Write a keyword-rich description of at least 150 characters. The first 2 lines must contain the most important keywords as they appear in search previews. Include a call to action.
-3. **Chapters**: Suggest 8-10 chapter timestamps based on the transcript content. Each chapter should have a clear, descriptive title.
-4. **Thumbnail Text**: Suggest short, punchy text (2-5 words) for the video thumbnail that drives clicks.
-5. **Keywords**: Suggest 5-8 keywords with estimated monthly search volume and keyword difficulty (0-100 scale). Prioritize long-tail keywords with reasonable volume and low difficulty.
-6. **Hashtags**: Suggest 10-15 hashtags. Tag each with the platform it's best suited for (youtube, instagram, or both).
-7. **Reasoning**: Explain your SEO strategy and why you chose these specific optimizations.
+═══════════════════════════════════════════════════
+YOUTUBE SEO BEST PRACTICES
+═══════════════════════════════════════════════════
 
-Always consider the target audience and brand voice when provided."""
+YouTube is the world's second-largest search engine. Text-based metadata is critical for indexing.
+
+**Titles (under 60 characters)**
+- Front-load the primary keyword so it is visible even when truncated.
+- Use power words (How-to, Best, Tips, Ultimate, Guide) to boost CTR.
+- Make the title compelling without being clickbait.
+
+**Descriptions (200+ words)**
+- Place the primary keyword in the first two sentences — this is the text visible before the "Show More" fold.
+- Include a call-to-action, relevant links, and secondary keywords.
+- Write naturally; avoid keyword stuffing.
+
+**Chapters & Timestamps**
+- Suggest 4-10 timestamp chapters that help Google index specific video segments.
+- Start from 0:00 with a clear intro label.
+
+**Keywords**
+- Prioritize long-tail keywords with high volume and low competition (difficulty < 40).
+- Include a mix of head terms and long-tail phrases.
+- Estimate realistic monthly search volume and difficulty (0-100).
+- Classify intent as: informational, navigational, commercial, or transactional.
+
+**Engagement Hooks**
+- Note that YouTube's algorithm prioritizes Watch Time and Retention.
+- The description should hint at a strong opening hook (first 10-15 seconds).
+
+**Tags/Hashtags for YouTube**
+- Suggest hashtags that appear in the video's title or above-the-fold area.
+- Mix broad category tags with specific niche tags.
+
+═══════════════════════════════════════════════════
+INSTAGRAM SEO BEST PRACTICES
+═══════════════════════════════════════════════════
+
+Instagram is now a keyword-searchable platform, not just hashtag-driven.
+
+**Captions**
+- Weave the primary keyword naturally into the first sentence — Instagram scans caption text for relevance.
+- Keep the opening line compelling; it's what users see before "… more."
+
+**Smart Hashtagging (3-5 highly relevant)**
+- Avoid "spammy" walls of 30 tags.
+- Balance broad reach tags (e.g., #fitness) with niche tags (e.g., #hiitworkoutathome).
+- Every hashtag must be directly relevant to the content.
+
+**Alt Text**
+- Suggest descriptive alt text that includes keywords for both accessibility and search indexing.
+
+**Reels**
+- Recommend on-screen text and trending audio concepts — the algorithm "reads" text overlays to categorize the video.
+- Suggest concise overlay text phrases.
+
+**Engagement Triggers**
+- "Saves" and "Shares" are the strongest signals for reach.
+- Include a description CTA that encourages saving or sharing.
+
+═══════════════════════════════════════════════════
+KEY RANKING FACTORS COMPARISON
+═══════════════════════════════════════════════════
+
+| Factor          | YouTube                          | Instagram                        |
+|-----------------|----------------------------------|----------------------------------|
+| Primary Driver  | Keyword Relevance + Watch Time   | User Activity + Relevance        |
+| Key Metadata    | Title, Description, Tags         | Captions, Bio, Alt Text          |
+| Engagement      | Likes, Comments, Subscribers     | Saves, Shares, Comments          |
+| Discovery       | Search & Suggested Feed          | Explore Page & Search            |
+
+═══════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════
+
+Return a JSON object with these fields:
+1. **title** — SEO-optimized title (under 60 chars, primary keyword front-loaded)
+2. **description** — 200+ word description. For YouTube: keyword-rich first 2 lines, CTA, secondary keywords. For Instagram: keyword in first sentence, save/share CTA.
+3. **chapters** — Array of {time, title} for video chapters/timestamps (4-10 entries, starting from 0:00)
+4. **thumbnailText** — 2-5 punchy words for the thumbnail overlay
+5. **keywords** — 5-8 keywords, each with {keyword, volume, difficulty, intent}
+6. **hashtags** — YouTube: 5-8 hashtags. Instagram: 3-5 highly relevant. When platform is "both", provide 10-15 deduplicated. Each: {hashtag, platform}
+7. **altText** — Descriptive alt text (1-2 sentences) for Instagram posts
+8. **onScreenText** — 3-5 short overlay text suggestions for Reels
+9. **engagementHook** — A compelling opening line for the first 10-15 seconds to retain viewers
+10. **reasoning** — Explain your SEO strategy: why these keywords, the ranking opportunity, and engagement optimization tactics
+
+Always consider the target audience, content niche, and brand voice when provided.\
+"""
 
 
 def _build_user_message(transcript_text: str, platform: str, target_audience: str | None = None) -> str:
@@ -65,13 +147,58 @@ async def generate_seo_brief(
                         "properties": {
                             "title": {"type": "string"},
                             "description": {"type": "string"},
-                            "chapters": {"type": "array", "items": {"type": "object", "properties": {"time": {"type": "string"}, "title": {"type": "string"}}, "required": ["time", "title"], "additionalProperties": False}},
+                            "chapters": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "time": {"type": "string"},
+                                        "title": {"type": "string"},
+                                    },
+                                    "required": ["time", "title"],
+                                    "additionalProperties": False,
+                                },
+                            },
                             "thumbnailText": {"type": "string"},
-                            "keywords": {"type": "array", "items": {"type": "object", "properties": {"keyword": {"type": "string"}, "volume": {"type": "number"}, "difficulty": {"type": "number"}}, "required": ["keyword", "volume", "difficulty"], "additionalProperties": False}},
-                            "hashtags": {"type": "array", "items": {"type": "object", "properties": {"hashtag": {"type": "string"}, "platform": {"type": "string"}}, "required": ["hashtag", "platform"], "additionalProperties": False}},
+                            "keywords": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "keyword": {"type": "string"},
+                                        "volume": {"type": "number"},
+                                        "difficulty": {"type": "number"},
+                                        "intent": {"type": "string"},
+                                    },
+                                    "required": ["keyword", "volume", "difficulty", "intent"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                            "hashtags": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "hashtag": {"type": "string"},
+                                        "platform": {"type": "string"},
+                                    },
+                                    "required": ["hashtag", "platform"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                            "altText": {"type": "string"},
+                            "onScreenText": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "engagementHook": {"type": "string"},
                             "reasoning": {"type": "string"},
                         },
-                        "required": ["title", "description", "chapters", "thumbnailText", "keywords", "hashtags", "reasoning"],
+                        "required": [
+                            "title", "description", "chapters", "thumbnailText",
+                            "keywords", "hashtags", "altText", "onScreenText",
+                            "engagementHook", "reasoning",
+                        ],
                         "additionalProperties": False,
                     },
                 },
@@ -87,7 +214,11 @@ async def generate_seo_brief(
             model=model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"{user_message}\n\nReturn only valid JSON with keys: title, description, chapters, thumbnailText, keywords, hashtags, reasoning."},
+                {"role": "user", "content": (
+                    f"{user_message}\n\nReturn only valid JSON with keys: "
+                    "title, description, chapters, thumbnailText, keywords, "
+                    "hashtags, altText, onScreenText, engagementHook, reasoning."
+                )},
             ],
             response_format={"type": "json_object"},
             temperature=0.7,
@@ -104,6 +235,9 @@ async def generate_seo_brief(
     description = result.get("description", "")
     chapters = result.get("chapters", [])
     thumbnail_text = result.get("thumbnailText", "")
+    alt_text = result.get("altText", "")
+    on_screen_text = result.get("onScreenText", [])
+    engagement_hook = result.get("engagementHook", "")
     kws = result.get("keywords", [])
     hts = result.get("hashtags", [])
     reasoning = result.get("reasoning", "")
@@ -129,8 +263,11 @@ async def generate_seo_brief(
     for idx, kw in enumerate(kws):
         db.add(Keyword(
             id=str(uuid.uuid4()), brief_id=brief.id,
-            keyword=kw.get("keyword", ""), search_volume=int(kw.get("volume", 0)),
-            difficulty=kw.get("difficulty", 0), rank=idx + 1,
+            keyword=kw.get("keyword", ""),
+            search_volume=int(kw.get("volume", 0)),
+            difficulty=kw.get("difficulty", 0),
+            intent=kw.get("intent", ""),
+            rank=idx + 1,
         ))
 
     for idx, ht in enumerate(hts):
@@ -145,6 +282,9 @@ async def generate_seo_brief(
     return {
         "id": brief.id, "title": title, "description": description,
         "chapters": chapters, "thumbnailText": thumbnail_text,
+        "altText": alt_text, "onScreenText": on_screen_text,
+        "engagementHook": engagement_hook,
         "keywords": kws, "hashtags": hts, "reasoning": reasoning,
         "projectId": project_id, "platform": platform, "createdAt": brief.created_at,
     }
+

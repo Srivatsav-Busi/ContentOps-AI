@@ -236,10 +236,10 @@ export default function ProjectDetailPage() {
           {uploadAsset.isPending
             ? "Uploading..."
             : processAsset.isPending
-            ? "Processing..."
-            : generateSEO.isPending
-            ? "Generating SEO..."
-            : "Upload Asset"}
+              ? "Processing..."
+              : generateSEO.isPending
+                ? "Generating SEO..."
+                : "Upload Asset"}
         </Button>
         <Button variant="outline">
           <Settings className="size-4" />
@@ -371,62 +371,273 @@ function AssetsGrid({ assets }: { assets: VideoAsset[] }) {
 // ── SEO Briefs List ──────────────────────────────────────────────────────────
 
 function SEOBriefsList({ briefs }: { briefs: SEOBrief[] }) {
+  const [selectedBrief, setSelectedBrief] = useState<SEOBrief | null>(null);
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {briefs.map((brief) => (
-        <Card
-          key={brief.id}
-          className="cursor-pointer transition-all hover:shadow-md hover:ring-1 hover:ring-indigo-500/20"
-        >
+    <div className="space-y-6">
+      {/* Cards grid */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {briefs.map((brief) => (
+          <Card
+            key={brief.id}
+            onClick={() =>
+              setSelectedBrief(
+                selectedBrief?.id === brief.id ? null : brief
+              )
+            }
+            className={`cursor-pointer transition-all hover:shadow-md hover:ring-1 hover:ring-indigo-500/20 ${selectedBrief?.id === brief.id
+              ? "ring-2 ring-indigo-500 shadow-md"
+              : ""
+              }`}
+          >
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base leading-snug">
+                    {brief.title}
+                  </CardTitle>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={platformColors[brief.platform] ?? ""}
+                >
+                  {brief.platform === "both"
+                    ? "YouTube + IG"
+                    : brief.platform.charAt(0).toUpperCase() +
+                    brief.platform.slice(1)}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-muted-foreground line-clamp-2 text-sm">
+                {brief.description}
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                {brief.keywords?.slice(0, 6).map((kw) => (
+                  <span
+                    key={kw.id}
+                    className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  >
+                    <Hash className="size-3" />
+                    {kw.keyword}
+                  </span>
+                ))}
+              </div>
+
+              <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1">
+                  <FileText className="size-3" />
+                  v{brief.version}
+                </span>
+                <span>{brief.keywords?.length ?? 0} keywords</span>
+                <span>{brief.hashtags?.length ?? 0} hashtags</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* ── Expanded detail panel ── */}
+      {selectedBrief && (
+        <Card className="border-indigo-200 bg-gradient-to-br from-white to-slate-50 dark:border-indigo-800 dark:from-slate-900 dark:to-slate-950">
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <CardTitle className="text-base leading-snug">
-                  {brief.title}
+              <div className="space-y-1">
+                <CardTitle className="text-lg">
+                  {selectedBrief.title}
                 </CardTitle>
+                <p className="text-muted-foreground text-sm">
+                  {selectedBrief.platform === "both"
+                    ? "YouTube + Instagram"
+                    : selectedBrief.platform.charAt(0).toUpperCase() +
+                    selectedBrief.platform.slice(1)}
+                  {" · "}v{selectedBrief.version}
+                  {selectedBrief.targetAudience &&
+                    ` · Target: ${selectedBrief.targetAudience}`}
+                </p>
               </div>
-              <Badge
-                variant="outline"
-                className={platformColors[brief.platform] ?? ""}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedBrief(null)}
               >
-                {brief.platform === "both"
-                  ? "YouTube + IG"
-                  : brief.platform.charAt(0).toUpperCase() +
-                    brief.platform.slice(1)}
-              </Badge>
+                ✕
+              </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-muted-foreground line-clamp-2 text-sm">
-              {brief.description}
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {brief.keywords?.map((kw) => (
-                <span
-                  key={kw.id}
-                  className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                >
-                  <Hash className="size-3" />
-                  {kw.keyword}
-                </span>
-              ))}
+          <CardContent className="space-y-6">
+            {/* Description */}
+            <div>
+              <h4 className="text-sm font-semibold mb-2">Description</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                {selectedBrief.description}
+              </p>
             </div>
 
-            <div className="text-muted-foreground flex items-center gap-3 text-xs">
-              <span className="flex items-center gap-1">
-                <FileText className="size-3" />
-                v{brief.version}
-              </span>
-              <span>{brief.keywords?.length ?? 0} keywords</span>
-              <span>{brief.hashtags?.length ?? 0} hashtags</span>
-            </div>
+            {/* Thumbnail Text */}
+            {selectedBrief.thumbnailText && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">
+                  Thumbnail Text
+                </h4>
+                <div className="rounded-lg bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                  {selectedBrief.thumbnailText}
+                </div>
+              </div>
+            )}
+
+            {/* Keywords */}
+            {selectedBrief.keywords && selectedBrief.keywords.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-3">
+                  Keywords ({selectedBrief.keywords.length})
+                </h4>
+                <div className="rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Keyword</TableHead>
+                        <TableHead className="text-right">
+                          Search Volume
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Difficulty
+                        </TableHead>
+                        <TableHead>Intent</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedBrief.keywords.map((kw) => (
+                        <TableRow key={kw.id}>
+                          <TableCell className="font-medium">
+                            {kw.keyword}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {kw.searchVolume?.toLocaleString() ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {kw.difficulty != null ? (
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${kw.difficulty < 30
+                                  ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
+                                  : kw.difficulty < 60
+                                    ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400"
+                                    : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+                                  }`}
+                              >
+                                {kw.difficulty}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {kw.intent ?? "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {/* Hashtags */}
+            {selectedBrief.hashtags && selectedBrief.hashtags.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-3">
+                  Hashtags ({selectedBrief.hashtags.length})
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedBrief.hashtags.map((ht) => (
+                    <span
+                      key={ht.id}
+                      className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1 text-sm font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                    >
+                      {ht.hashtag}
+                      {ht.platform && ht.platform !== "both" && (
+                        <span className="ml-1 text-xs opacity-60">
+                          ({ht.platform})
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Chapters */}
+            {selectedBrief.chapters && selectedBrief.chapters.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-3">
+                  Chapters ({selectedBrief.chapters.length})
+                </h4>
+                <div className="space-y-1">
+                  {selectedBrief.chapters.map((ch, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 w-16 shrink-0">
+                        {ch.time}
+                      </span>
+                      <span>{ch.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Engagement Hook */}
+            {selectedBrief.engagementHook && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">
+                  🎯 Engagement Hook (first 10-15 seconds)
+                </h4>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                  &ldquo;{selectedBrief.engagementHook}&rdquo;
+                </div>
+              </div>
+            )}
+
+            {/* Alt Text */}
+            {selectedBrief.altText && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">
+                  📝 Alt Text (Instagram Accessibility + SEO)
+                </h4>
+                <p className="text-sm text-muted-foreground italic leading-relaxed">
+                  {selectedBrief.altText}
+                </p>
+              </div>
+            )}
+
+            {/* On-Screen Text for Reels */}
+            {selectedBrief.onScreenText && selectedBrief.onScreenText.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-3">
+                  🎬 On-Screen Text (Reels Overlays)
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedBrief.onScreenText.map((text, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white dark:bg-white dark:text-slate-900"
+                    >
+                      {text}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
-      ))}
+      )}
     </div>
   );
 }
+
 
 // ── Campaigns Table ──────────────────────────────────────────────────────────
 

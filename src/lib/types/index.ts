@@ -174,6 +174,9 @@ export interface SEOBrief {
   version: number;
   keywords?: Keyword[];
   hashtags?: Hashtag[];
+  altText?: string;
+  onScreenText?: string[];
+  engagementHook?: string;
   createdBy: string;
   createdAt: string;
 }
