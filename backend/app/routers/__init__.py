@@ -1,0 +1,41 @@
+"""Router module exports."""
+
+from . import (
+    ai,
+    alerts,
+    assets,
+    auth,
+    billing,
+    campaigns,
+    dashboards,
+    exports,
+    kpis,
+    oauth,
+    projects,
+    render_jobs,
+    reports,
+    scheduled_posts,
+    seo_briefs,
+    social_accounts,
+    stream,
+)
+
+__all__ = [
+    "ai",
+    "alerts",
+    "assets",
+    "auth",
+    "billing",
+    "campaigns",
+    "dashboards",
+    "exports",
+    "kpis",
+    "oauth",
+    "projects",
+    "render_jobs",
+    "reports",
+    "scheduled_posts",
+    "seo_briefs",
+    "social_accounts",
+    "stream",
+]

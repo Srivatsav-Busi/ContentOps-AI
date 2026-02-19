@@ -24,6 +24,8 @@ from app.routers import (
     social_accounts,
     scheduled_posts,
     oauth,
+    kpis,
+    stream,
 )
 
 
@@ -96,4 +98,5 @@ app.include_router(ai.router)
 app.include_router(social_accounts.router)
 app.include_router(scheduled_posts.router)
 app.include_router(oauth.router)
-
+app.include_router(kpis.router)
+app.include_router(stream.router)

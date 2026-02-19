@@ -14,6 +14,7 @@ from app.models.publishing import SocialAccount
 from app.schemas.common import json_response, paginated_response, error_body
 
 router = APIRouter(prefix="/api/v1/social-accounts", tags=["social-accounts"])
+SUPPORTED_PROVIDERS = ("youtube", "instagram", "tiktok", "linkedin", "x", "facebook")
 
 
 def _account_to_dict(a: SocialAccount) -> dict:
@@ -65,10 +66,13 @@ def connect_account(
     auth: AuthContext = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
-    if body.provider not in ("youtube", "instagram"):
+    if body.provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(
             status_code=422,
-            detail=error_body("Provider must be 'youtube' or 'instagram'", "ERR_VALIDATION"),
+            detail=error_body(
+                "Provider must be one of: youtube, instagram, tiktok, linkedin, x, facebook",
+                "ERR_VALIDATION",
+            ),
         )
 
     # Check for existing account with same provider + uid

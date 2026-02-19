@@ -2,7 +2,7 @@
 
 **Raw Video → Published Content in Minutes**
 
-ContentOps AI is a multi-agent SaaS platform that converts raw video assets into platform-ready content. It generates SEO-optimized metadata, automates social publishing across every major channel, and provides AI-driven KPI dashboards — all from a single, intelligent interface.
+ContentOps AI is a multi-agent SaaS platform that converts raw video assets into platform-ready content. It generates SEO-optimized metadata, automates social publishing, and provides AI-driven KPI dashboards — all from a single, intelligent interface.
 
 ---
 
@@ -28,14 +28,16 @@ Browser ──▶ Next.js :3000 (Frontend + Auth + Proxy) ──▶ Python FastA
 
 - **AI Video Processing** — upload, FFprobe metadata extraction, scene detection, thumbnail generation
 - **SEO Metadata Generation** — AI agent producing titles, descriptions, keywords (with intent), chapters, hashtags, engagement hooks, alt text, and on-screen text for Reels
-- **Social Publishing** — full lifecycle: connect YouTube/Instagram accounts via OAuth → create campaigns → schedule posts → auto-publish via background scheduler
-- **YouTube & Instagram API Integration** — resumable upload (YouTube Data API v3), container publish flow (Instagram Graph API)
+- **Social Publishing** — full lifecycle: connect accounts → create campaigns → schedule posts → auto-publish via background scheduler
+- **YouTube & Instagram Native API Integration** — resumable upload (YouTube Data API v3), container publish flow (Instagram Graph API)
+- **Extended Channel Support** — TikTok, LinkedIn, X, and Facebook via configurable provider publish endpoints
 - **OAuth 2.0** — Google OAuth for YouTube, Facebook OAuth for Instagram Business Accounts
 - **Background Scheduler** — asyncio task that polls every 60s and auto-publishes due posts
-- **KPI Dashboards & Reporting** — dashboard/report CRUD, anomaly detection + AI explanation, AI-powered KPI recommendations
+- **KPI Dashboards & Reporting** — dashboard/report CRUD, KPI auto-generation + persistence, anomaly detection + AI explanation, AI-powered KPI recommendations, AI-generated report summaries
+- **Realtime Streams (SSE)** — live KPI dashboard snapshots and publish-status streams
 - **5 AI Agents** — SEO generator, edit plan generator, anomaly explainer, report writer, KPI recommender
 - **Auth + Roles + Org** — credential auth, registration, role-aware permissions (viewer/editor/admin/owner)
-- **32 API Endpoints** — authenticated `/api/v1/*` surface covering all operations
+- **Expanded API Surface** — authenticated `/api/v1/*` endpoints for content, AI, publishing, KPI automation, and realtime streams
 - **SQLite Local-First** — file-based DB (`data/contentops.db`) with 25-table schema
 
 ### Notes
@@ -127,13 +129,20 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 FACEBOOK_APP_ID=your-facebook-app-id
 FACEBOOK_APP_SECRET=your-facebook-app-secret
 OAUTH_REDIRECT_BASE_URL=http://localhost:8000
+
+# Optional: Extended channel publish adapters
+TIKTOK_PUBLISH_URL=
+LINKEDIN_PUBLISH_URL=
+X_PUBLISH_URL=
+FACEBOOK_PUBLISH_URL=
 ```
 
 Notes:
 - Keep the trailing `/` in `LLM_API_URL`.
 - SQLite is local by default at `./data/contentops.db` (no separate DB server required).
 - The Python backend reads the same `.env.local` file automatically.
-- OAuth credentials are only needed for YouTube/Instagram publishing. All other features work without them.
+- OAuth credentials are needed for native YouTube/Instagram publishing.
+- For TikTok/LinkedIn/X/Facebook publishing, configure provider publish endpoints.
 
 ### Step 3: Database Setup
 
@@ -205,7 +214,7 @@ contentops/
 │   │   ├── database.py             # SQLAlchemy engine + session
 │   │   ├── dependencies.py         # Auth context dependency
 │   │   ├── models/                 # SQLAlchemy ORM models (25 tables)
-│   │   ├── routers/                # API route handlers (15 routers)
+│   │   ├── routers/                # API route handlers
 │   │   ├── schemas/                # Pydantic request/response schemas
 │   │   └── services/               # Business logic
 │   │       ├── ai_client.py        # OpenAI client setup
@@ -214,7 +223,7 @@ contentops/
 │   │       ├── anomaly_explainer.py    # Anomaly explanation agent
 │   │       ├── report_writer.py    # Report summary writer agent
 │   │       ├── kpi_recommender.py  # KPI recommendation agent
-│   │       ├── publisher.py        # YouTube + Instagram API publishing
+│   │       ├── publisher.py        # Multi-platform publishing (native + adapters)
 │   │       ├── scheduler.py        # Background auto-publish scheduler
 │   │       └── video/              # Video processing (ffmpeg)
 │   ├── requirements.txt            # Python dependencies
@@ -268,6 +277,7 @@ All API routes are available under `/api/v1/*`. The Next.js frontend proxies req
 | POST | `/api/v1/scheduled-posts/{id}/publish` | Manually trigger publish |
 | POST | `/api/v1/scheduled-posts/{id}/cancel` | Cancel scheduled post |
 | GET | `/api/v1/scheduled-posts/{id}/events` | View publish event history |
+| GET | `/api/v1/stream/posts/{id}` | Realtime publish-status SSE stream |
 
 ### OAuth
 | Method | Endpoint | Description |
@@ -283,9 +293,18 @@ All API routes are available under `/api/v1/*`. The Next.js frontend proxies req
 | GET/POST | `/api/v1/campaigns` | List / create campaigns |
 | GET/POST | `/api/v1/dashboards` | List / create dashboards |
 | GET | `/api/v1/reports` | List reports |
+| POST | `/api/v1/reports/generate` | Generate + persist AI report summary |
 | GET/POST | `/api/v1/alerts` | List / create alerts |
 | GET | `/api/v1/seo-briefs` | List SEO briefs |
 | GET | `/api/v1/billing` | Get billing info |
+
+### KPI Automation & Realtime
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/v1/kpis` | List / create KPI configs for dashboard |
+| POST | `/api/v1/kpis/auto-generate` | AI-generate KPIs and persist to dashboard |
+| GET/POST | `/api/v1/kpis/{id}/timeseries` | Read / upsert KPI datapoints |
+| GET | `/api/v1/stream/kpis?dashboard_id=...` | Realtime KPI snapshot SSE stream |
 
 ### Interactive API Docs
 
@@ -330,21 +349,26 @@ When the Python backend is running, visit [http://localhost:8000/docs](http://lo
 ### 4) Social Publishing Workflows
 
 1. **Connect accounts**: call `GET /api/v1/oauth/youtube/authorize` or `GET /api/v1/oauth/instagram/authorize` to get an OAuth URL, redirect the user, and the callback stores tokens automatically
-2. **Verify connection**: `GET /api/v1/social-accounts` lists connected accounts
-3. **Create a campaign**: `POST /api/v1/campaigns`
-4. **Schedule a post**: `POST /api/v1/scheduled-posts` with `campaignId`, `accountId`, `platform`, `scheduledAt`
-5. **Approve**: `POST /api/v1/scheduled-posts/{id}/approve` moves status from `draft` → `scheduled`
-6. **Auto-publish**: the background scheduler picks up due posts and publishes them automatically
-7. **Manual publish**: `POST /api/v1/scheduled-posts/{id}/publish` triggers immediate publishing
-8. **Monitor**: `GET /api/v1/scheduled-posts/{id}/events` shows publish event history with platform URLs, error codes, and retry counts
+2. **Alternative providers**: connect TikTok/LinkedIn/X/Facebook using `POST /api/v1/social-accounts` with provider + tokens
+3. **Verify connection**: `GET /api/v1/social-accounts` lists connected accounts
+4. **Create a campaign**: `POST /api/v1/campaigns`
+5. **Schedule a post**: `POST /api/v1/scheduled-posts` with `campaignId`, `accountId`, `platform`, `scheduledAt`
+6. **Approve**: `POST /api/v1/scheduled-posts/{id}/approve` moves status from `draft` → `scheduled`
+7. **Auto-publish**: the background scheduler picks up due posts and publishes them automatically
+8. **Manual publish**: `POST /api/v1/scheduled-posts/{id}/publish` triggers immediate publishing
+9. **Monitor history**: `GET /api/v1/scheduled-posts/{id}/events` shows publish event history
+10. **Monitor realtime**: `GET /api/v1/stream/posts/{id}` streams current publish status
 
 ### 5) KPI Dashboards / Reporting
 
 1. Create dashboard: `POST /api/v1/dashboards` or use `/app/dashboards`
 2. **Get AI KPI recommendations**: `POST /api/v1/ai/kpi-recommend` with `industry`, `businessType`, `goals` — returns prioritized KPIs with visualization types and targets
-3. List dashboards: `GET /api/v1/dashboards`
-4. View reports in `/app/reports` using `GET /api/v1/reports`
-5. Use AI anomaly explain route when anomaly data exists: `POST /api/v1/ai/anomaly-explain`
+3. **Persist recommended KPIs**: `POST /api/v1/kpis/auto-generate` with `dashboardId`, `industry`, `businessType`, `goals`
+4. **Write KPI datapoints**: `POST /api/v1/kpis/{id}/timeseries`
+5. **Stream realtime KPI snapshots**: `GET /api/v1/stream/kpis?dashboard_id=<dashboardId>`
+6. **Generate AI report summary**: `POST /api/v1/reports/generate`
+7. View reports in `/app/reports` using `GET /api/v1/reports`
+8. Use AI anomaly explain route when anomaly data exists: `POST /api/v1/ai/anomaly-explain`
 
 ### Edited Output Pipeline (API)
 

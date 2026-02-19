@@ -242,6 +242,51 @@ async def _publish_to_instagram(
             )
 
 
+async def _publish_to_generic_api(
+    *,
+    provider: str,
+    endpoint_url: str,
+    account: SocialAccount,
+    export: Export | None,
+    post: ScheduledPost,
+) -> dict:
+    """Publish via a provider-specific webhook style endpoint.
+
+    This adapter enables additional channels where direct API OAuth wiring may vary
+    by tenant setup. The endpoint is expected to accept JSON and return
+    platform_post_id/platform_url fields.
+    """
+    if not endpoint_url:
+        raise ValueError(f"{provider} publishing is not configured (missing endpoint URL)")
+    if not account.access_token:
+        raise ValueError(f"{provider} account has no access token")
+    if not export or not export.public_url:
+        raise ValueError(f"{provider} publishing requires an export with public_url")
+
+    payload = {
+        "provider": provider,
+        "provider_uid": account.provider_uid,
+        "title": post.title or "Untitled Video",
+        "description": post.description or "",
+        "hashtags": post.hashtags or "",
+        "video_url": export.public_url,
+        "scheduled_post_id": post.id,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {account.access_token}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(endpoint_url, headers=headers, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "platform_post_id": data.get("platform_post_id", data.get("id", "")),
+            "platform_url": data.get("platform_url", data.get("url", "")),
+        }
+
+
 # ── Publish Orchestrator ──────────────────────────────────────
 
 async def publish_post(post_id: str, db: Session) -> PublishEvent:
@@ -286,6 +331,38 @@ async def publish_post(post_id: str, db: Session) -> PublishEvent:
             result = await _publish_to_youtube(account, export, post)
         elif post.platform == "instagram":
             result = await _publish_to_instagram(account, export, post)
+        elif post.platform == "tiktok":
+            result = await _publish_to_generic_api(
+                provider="tiktok",
+                endpoint_url=settings.tiktok_publish_url,
+                account=account,
+                export=export,
+                post=post,
+            )
+        elif post.platform == "linkedin":
+            result = await _publish_to_generic_api(
+                provider="linkedin",
+                endpoint_url=settings.linkedin_publish_url,
+                account=account,
+                export=export,
+                post=post,
+            )
+        elif post.platform == "x":
+            result = await _publish_to_generic_api(
+                provider="x",
+                endpoint_url=settings.x_publish_url,
+                account=account,
+                export=export,
+                post=post,
+            )
+        elif post.platform == "facebook":
+            result = await _publish_to_generic_api(
+                provider="facebook",
+                endpoint_url=settings.facebook_publish_url,
+                account=account,
+                export=export,
+                post=post,
+            )
         else:
             raise ValueError(f"Unsupported platform: {post.platform}")
 

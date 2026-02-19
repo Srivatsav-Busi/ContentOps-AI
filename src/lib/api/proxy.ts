@@ -23,7 +23,7 @@ const PYTHON_BACKEND =
 export async function proxyToBackend(
     request: NextRequest,
     backendPath: string,
-    opts?: { skipAuth?: boolean }
+    opts?: { skipAuth?: boolean; stream?: boolean }
 ): Promise<NextResponse> {
     // Handle CORS preflight
     if (request.method === "OPTIONS") {
@@ -85,6 +85,22 @@ export async function proxyToBackend(
 
     try {
         const resp = await fetch(backendUrl, fetchOpts);
+
+        if (opts?.stream) {
+            return new NextResponse(resp.body, {
+                status: resp.status,
+                headers: {
+                    "Content-Type": resp.headers.get("Content-Type") || "text/event-stream",
+                    "Cache-Control": resp.headers.get("Cache-Control") || "no-cache",
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods":
+                        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                },
+            });
+        }
+
         const data = await resp.text();
 
         return new NextResponse(data, {
@@ -97,8 +113,9 @@ export async function proxyToBackend(
                 "Access-Control-Allow-Headers": "Content-Type, Authorization",
             },
         });
-    } catch (err: any) {
-        console.error(`Proxy error → ${backendUrl}:`, err.message);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Proxy error → ${backendUrl}:`, message);
         return errorResponse(
             "Backend service unavailable",
             502,

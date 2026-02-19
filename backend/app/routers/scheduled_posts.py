@@ -14,6 +14,7 @@ from app.models.publishing import ScheduledPost, Campaign, SocialAccount, Publis
 from app.schemas.common import json_response, paginated_response, error_body
 
 router = APIRouter(prefix="/api/v1/scheduled-posts", tags=["scheduled-posts"])
+SUPPORTED_PLATFORMS = ("youtube", "instagram", "tiktok", "linkedin", "x", "facebook")
 
 
 def _post_to_dict(p: ScheduledPost) -> dict:
@@ -117,8 +118,14 @@ def create_scheduled_post(
             detail=error_body(f"Social account is {account.status}. Re-authorize first.", "ERR_ACCOUNT_INACTIVE"),
         )
 
-    if body.platform not in ("youtube", "instagram"):
-        raise HTTPException(status_code=422, detail=error_body("Platform must be 'youtube' or 'instagram'", "ERR_VALIDATION"))
+    if body.platform not in SUPPORTED_PLATFORMS:
+        raise HTTPException(
+            status_code=422,
+            detail=error_body(
+                "Platform must be one of: youtube, instagram, tiktok, linkedin, x, facebook",
+                "ERR_VALIDATION",
+            ),
+        )
 
     now_iso = datetime.utcnow().isoformat()
     post = ScheduledPost(

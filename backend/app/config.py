@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     facebook_app_id: str = ""
     facebook_app_secret: str = ""
     oauth_redirect_base_url: str = "http://localhost:8000"
+    tiktok_publish_url: str = ""
+    linkedin_publish_url: str = ""
+    x_publish_url: str = ""
+    facebook_publish_url: str = ""
 
     model_config = {"env_file": "../.env.local", "extra": "ignore"}
 
