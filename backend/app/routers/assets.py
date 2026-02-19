@@ -207,8 +207,28 @@ async def process_asset(
     asset.status = "ready"
     db.commit()
 
+    # Auto-generate SEO brief from transcript (best-effort)
+    seo_generated = False
+    try:
+        if full_text and full_text.strip():
+            from app.services.seo_generator import generate_seo_brief
+
+            await generate_seo_brief(
+                transcript_text=full_text,
+                platform="both",
+                target_audience=None,
+                project_id=asset.project_id,
+                org_id=auth.user.org_id,
+                user_id=auth.user.id,
+                db=db,
+            )
+            seo_generated = True
+    except Exception as e:
+        print(f"[process] Auto-SEO generation skipped: {e}")
+
     return json_response({
         "assetId": asset.id,
         "scenesDetected": len(scene_rows),
         "transcriptGenerated": True,
+        "seoGenerated": seo_generated,
     })
